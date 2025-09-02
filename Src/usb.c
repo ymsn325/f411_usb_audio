@@ -21,9 +21,9 @@ static const uint8_t device_descriptor[] = {
     0x12,       // bLength
     0x01,       // bDescriptorType (Device)
     0x00, 0x02, // bcdUSB 2.00
-    0x01,       // bDeviceClass: each interface specifies class
-    0x00,       // bDeviceSubClass
-    0x20,       // bDeviceProtocol
+    0xef,       // bDeviceClass: each interface specifies class
+    0x02,       // bDeviceSubClass
+    0x01,       // bDeviceProtocol
     0x40,       // bMaxPacketSize0
     0x83, 0x04, // idVendor
     0x11, 0x57, // idProduct
@@ -34,28 +34,49 @@ static const uint8_t device_descriptor[] = {
     0x01        // bNumConfigurations
 };
 
-// Configuration Descriptor + Audio Control + Audio Streaming + Iso EP
+// Configuration Descriptor + Audio Control + Audio Streaming + Isochronous EP
 static const uint8_t config_descriptor[] = {
     // Configuration Descriptor
-    0x09, 0x02, 0x3b, 0x00, 0x02, 0x01, 0x00, 0x80, 0x32,
+    0x09,       // bLength = 9 bytes
+    0x02,       // bDescriptorType = config
+    0x23, 0x00, // wTotalLength
+    0x01,       // bNumInterfaces
+    0x01,       // nConfigurationValue
+    0x00,       // iConfiguration
+    0x80,       // bmAttributes = self powered
+    250,        // bMaxPower = 500mA
+
+    // Interface Association Descriptor
+    0x08, // bLength
+    0x0b, // bDescriptorType = INTERFACE ASSICOIATION descriptor
+    0x00, // bFirstInterface
+    0x02, // bInterfaceCount
+    0x01, // bFunctionClass
+    0x00, // bFunctionSubClass
+    0x20, // bFunctionProtocol = AF_VERSION_02_)0
+    0x00, // iFunction
 
     // Standard AC Interface Descriptor
-    0x09, 0x04, 0x00, 0x00, 0x00, 0x01, 0x01, 0x20, 0x00,
+    0x09, // bLength
+    0x04, // bDescriptorType = INTERFACE
+    0x00, // bInterfaceNumber
+    0x00, // bAlternateSetting
+    0x00, // bNumEndpoints
+    0x01, // bInterfaceClass
+    0x01, // bInterfaceSubClass = AUDIOCONTROL
+    0x20, // bInterfaceProtocol = IP_VERSION_02_00
+    0x00, // iInterface
 
     // Class-Specific AC Interface Descriptor
-    0x08, 0x24, 0x01, 0x00, 0x02, 0x16, 0x00, 0x01, 0x01,
+    0x09,       // bLength
+    0x24,       // bDescriptorType = CS_INTERFACE
+    0x01,       // bDescriptorSubType  = HEADER
+    0x02, 0x00, // bcdADC = UAC2.0
+    0x01,       // bCategory = DESKTOP_SPEAKER
+    0x09, 0x00, // wTotalLength = 9 bytes
+    0x00,       // bmControls = No control
 
-    // Standard AS Interface Descriptor (Alternate 0)
-    0x09, 0x04, 0x01, 0x00, 0x00, 0x01, 0x02, 0x00, 0x00,
-
-    // Standard AS Interface Descriptor (Alternate 1)
-    0x09, 0x04, 0x01, 0x01, 0x01, 0x01, 0x02, 0x00, 0x00,
-
-    // Class-Specific AS Interface Descriptor
-    0x07, 0x24, 0x01, 0x01, 0x01, 0x01, 0x00,
-
-    // Standard Isochronous EP Descriptor
-    0x07, 0x05, 0x01, 0x01, 0x40, 0x00, 0x01};
+};
 
 static void usb_core_reset(void) {
   USB->GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
@@ -72,6 +93,7 @@ void usb_init(void) {
   USB->GUSBCFG |= USB_OTG_GUSBCFG_FDMOD;
   USB->GRXFSIZ = 128;
   USB->DIEPTXF0_HNPTXFSIZ = (64 << USB_OTG_DIEPTXF_INEPTXFD_Pos) | 128;
+  USB->DIEPTXF[0] = (128 << USB_OTG_DIEPTXF_INEPTXFD_Pos) | 192;
   USB_DEV->DCFG |= USB_OTG_DCFG_DSPD;
   USB_DEV->DIEPMSK |= USB_OTG_DIEPMSK_XFRCM;
   USB_DEV->DOEPMSK |= USB_OTG_DOEPMSK_XFRCM;
@@ -89,6 +111,7 @@ void usb_init(void) {
 
 static volatile uint32_t reset_cnt = 0;
 static volatile uint32_t setup_cnt = 0;
+static volatile uint32_t set_interface_cnt = 0;
 
 void OTG_FS_IRQHandler(void) {
   uint32_t gintsts = USB->GINTSTS;
@@ -128,6 +151,7 @@ void OTG_FS_IRQHandler(void) {
       uint8_t bmRequestType = setup[0] & 0xff;
       uint16_t wValue = (setup[0] >> 16) & 0xffff;
       uint16_t wLength = (setup[1] >> 16) & 0xffff;
+      uint16_t wIndex = setup[1] & 0xffff;
 
       if (bRequest == 0x06) {
         // GET_DESCRIPTOR
@@ -172,6 +196,36 @@ void OTG_FS_IRQHandler(void) {
         uint8_t addr = wValue & 0x7f;
         USB_DEV->DCFG |= addr << USB_OTG_DCFG_DAD_Pos;
         USB_INEP[0].DIEPTSIZ = (1 << USB_OTG_DIEPTSIZ_PKTCNT_Pos);
+        USB_INEP[0].DIEPCTL |= USB_OTG_DIEPCTL_EPENA | USB_OTG_DIEPCTL_CNAK;
+
+      } else if (bRequest == 0x0b && (bmRequestType & 0x1f) == 0x01) {
+        // SET_INTERFACE request
+        set_interface_cnt++;
+        uint8_t interface_num = wIndex & 0xff;
+        uint8_t alt_settings = wValue & 0xff;
+        interface_num = wLength;
+
+        if (interface_num == 1) {
+          // AS interface
+          if (alt_settings == 0) {
+            USB_INEP[1].DIEPCTL &= ~USB_OTG_DIEPCTL_EPENA;
+            USB_OUTEP[1].DOEPCTL &= ~USB_OTG_DOEPCTL_EPENA;
+          } else if (alt_settings == 1) {
+            USB_INEP[1].DIEPTSIZ = (1 << USB_OTG_DIEPTSIZ_PKTCNT_Pos) | 192;
+            USB_INEP[1].DIEPCTL |= USB_OTG_DIEPCTL_EPENA | USB_OTG_DIEPCTL_CNAK;
+            USB_OUTEP[1].DOEPTSIZ = (1 << USB_OTG_DOEPTSIZ_PKTCNT_Pos) | 192;
+            USB_OUTEP[1].DOEPCTL |=
+                USB_OTG_DOEPCTL_EPENA | USB_OTG_DOEPCTL_CNAK;
+          }
+        }
+
+        // Status stage
+        USB_INEP[0].DIEPTSIZ = (1 << USB_OTG_DIEPTSIZ_PKTCNT_Pos);
+        USB_INEP[0].DIEPCTL |= USB_OTG_DIEPCTL_EPENA | USB_OTG_DIEPCTL_CNAK;
+
+      } else if (bRequest == 0x09) {
+        // SET_CONFIGURATION
+        USB_INEP[0].DIEPTSIZ = (1 << USB_OTG_DIEPTSIZ_PKTCNT_Pos) | 0;
         USB_INEP[0].DIEPCTL |= USB_OTG_DIEPCTL_EPENA | USB_OTG_DIEPCTL_CNAK;
 
       } else {
