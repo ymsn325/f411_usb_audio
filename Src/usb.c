@@ -39,7 +39,7 @@ static const uint8_t config_descriptor[] = {
     // Configuration Descriptor
     0x09,       // bLength = 9 bytes
     0x02,       // bDescriptorType = config
-    0x23, 0x00, // wTotalLength
+    0x57, 0x00, // wTotalLength
     0x01,       // bNumInterfaces
     0x01,       // nConfigurationValue
     0x00,       // iConfiguration
@@ -73,9 +73,64 @@ static const uint8_t config_descriptor[] = {
     0x01,       // bDescriptorSubType  = HEADER
     0x02, 0x00, // bcdADC = UAC2.0
     0x01,       // bCategory = DESKTOP_SPEAKER
-    0x09, 0x00, // wTotalLength = 9 bytes
+    0x3e, 0x00, // wTotalLength = 9 bytes
     0x00,       // bmControls = No control
 
+    // Clock Source Descriptor
+    0x08, // bLength
+    0x24, // bDeescriptorType = CS_INTERFACE
+    0x0a, // bDescriptorSubSype = CLOCK_SOURCE
+    0x00, // bClockID
+    0x01, // bmAttributes = Internal fixed clock
+    0x07, // bmControl
+    0x00, // bAssocTerminal
+    0x00, // iClockSource
+
+    // Clock Selector Descriptor
+    0x08, // bLength
+    0x24, // bDescriptorType = CS_INTERFACE
+    0x0b, // bDescriptorSubType = CLOCK_SELECTOR
+    0x01, // bClockID
+    0x01, // bNrInPins
+    0x00, // baCSourceID[1]
+    0x03, // bmControls
+    0x00, // iClockSelector
+
+    // Clock Multiplier Descriptor
+    0x08, // bLength = 8 bytes
+    0x24, // bDescriptorType = CS_INTERFACE
+    0x0C, // bDescriptorSubtype = CLOCK_MULTIPLIER
+    0x02, // bClockID = このクロックマルチプライヤのID
+    0x00, // bCSourceID = 乗算元 Clock Source ID
+    0x03, // bmControls = 0b11 → ホストが変更可能
+    0x04, // bMultiplier = 4倍
+    0x00, // iClockMultiplier = 文字列なし
+
+    // Input Terminal Descriptor
+    0x11,                   // bLength = 17 bytes
+    0x24,                   // bDescriptorType = CS_INTERFACE
+    0x02,                   // bDescriptorSubtype = INPUT_TERMINAL
+    0x01,                   // bTerminalID = 1
+    0x01, 0x02,             // wTerminalType = USB Streaming (0x0201)
+    0x00,                   // bAssocTerminal = なし
+    0x00,                   // bCSourceID = Clock Source ID 0x10
+    0x02,                   // bNrChannels = 2 (ステレオ)
+    0x03, 0x00, 0x00, 0x00, // wChannelConfig = 左右チャンネル
+    0x00,                   // iChannelNames = なし
+    0x00, 0x00,             // bmControls = none
+    0x00,                   // iTerminal = なし
+
+    // Output Terminal Descriptor
+    0x0c,       // bLength = 9 bytes
+    0x24,       // bDescriptorType = CS_INTERFACE
+    0x03,       // bDescriptorSubtype = OUTPUT_TERMINAL
+    0x02,       // bTerminalID = 2
+    0x01, 0x03, // wTerminalType = Speaker (0x0301)
+    0x00,       // bAssocTerminal = なし
+    0x01,       // bSourceID = Input Terminal ID (または Feature Unit ID)
+    0x00,       // bCSourceID = Clock Source ID
+    0x00, 0x00, // bmControls = none
+    0x00        // iTerminal = なし
 };
 
 static void usb_core_reset(void) {
