@@ -17,16 +17,15 @@
   ((uint32_t *)(USB_OTG_FS_PERIPH_BASE + USB_OTG_FIFO_BASE +                   \
                 ((ep) * USB_OTG_FIFO_SIZE)))
 
-// Device Descriptor
 static const uint8_t device_descriptor[] = {
     0x12,       // bLength
     0x01,       // bDescriptorType (Device)
     0x00, 0x02, // bcdUSB 2.00
-    0x00,       // bDeviceClass (0 = each interface specifies class)
+    0x01,       // bDeviceClass: each interface specifies class
     0x00,       // bDeviceSubClass
-    0x00,       // bDeviceProtocol
+    0x20,       // bDeviceProtocol
     0x40,       // bMaxPacketSize0
-    0x83, 0x04, // idVendor (STMicroelectronics)
+    0x83, 0x04, // idVendor
     0x11, 0x57, // idProduct
     0x00, 0x01, // bcdDevice
     0x01,       // iManufacturer
@@ -35,15 +34,28 @@ static const uint8_t device_descriptor[] = {
     0x01        // bNumConfigurations
 };
 
-// Configuration Descriptor + Audio Control + Audio Streaming (最小)
-
+// Configuration Descriptor + Audio Control + Audio Streaming + Iso EP
 static const uint8_t config_descriptor[] = {
     // Configuration Descriptor
-    0x09, 0x02, 0x12, 0x00, 0x01, 0x01, 0x00, 0x80, 0x32,
-    // Interface Descriptor
-    0x09, 0x04, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00
-    // Endpoint Descriptorは今回は無し（EP0のみ）
-};
+    0x09, 0x02, 0x3b, 0x00, 0x02, 0x01, 0x00, 0x80, 0x32,
+
+    // Standard AC Interface Descriptor
+    0x09, 0x04, 0x00, 0x00, 0x00, 0x01, 0x01, 0x20, 0x00,
+
+    // Class-Specific AC Interface Descriptor
+    0x08, 0x24, 0x01, 0x00, 0x02, 0x16, 0x00, 0x01, 0x01,
+
+    // Standard AS Interface Descriptor (Alternate 0)
+    0x09, 0x04, 0x01, 0x00, 0x00, 0x01, 0x02, 0x00, 0x00,
+
+    // Standard AS Interface Descriptor (Alternate 1)
+    0x09, 0x04, 0x01, 0x01, 0x01, 0x01, 0x02, 0x00, 0x00,
+
+    // Class-Specific AS Interface Descriptor
+    0x07, 0x24, 0x01, 0x01, 0x01, 0x01, 0x00,
+
+    // Standard Isochronous EP Descriptor
+    0x07, 0x05, 0x01, 0x01, 0x40, 0x00, 0x01};
 
 static void usb_core_reset(void) {
   USB->GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
