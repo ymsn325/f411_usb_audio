@@ -29,8 +29,8 @@ static const uint8_t device_descriptor[] = {
     0x00, 0x00, // idVendor
     0x00, 0x00, // idProduct
     0x00, 0x00, // bcdDevice
-    0x00,       // iManufacture
-    0x00,       // iProduct
+    0x01,       // iManufacture
+    0x02,       // iProduct
     0x00,       // iSerialNumber
     0x01        // bNumConfigurations
 };
@@ -39,7 +39,7 @@ static const uint8_t config_descriptor[] = {
     // standard configuration descriptor
     0x09,       // bLength
     0x02,       // bDescriptorType
-    0x96, 0x00, // wTotalLength
+    0x87, 0x00, // wTotalLength
     0x02,       // bNumInterfaces
     0x01,       // bConfigurationValue
     0x00,       // iConfiguration
@@ -74,7 +74,7 @@ static const uint8_t config_descriptor[] = {
     0x01,       // bDescriptorSubType
     0x00, 0x02, // bcdADC
     0x01,       // bCategory
-    0x37, 0x00, // wTotalLength
+    0x2e, 0x00, // wTotalLength
     0x11,       // bmControls
 
     // clock source descriptor
@@ -86,25 +86,6 @@ static const uint8_t config_descriptor[] = {
     0x00, // bmControls
     0x00, // bAssocTerminal
     0x00, // iCockSource
-
-    // clock selector descriptor
-    0x08, // bLength
-    0x24, // bDescriptorType
-    0x0b, // bDescriptorSubType
-    0x02, // bClockID
-    0x01, // bNrInPins
-    0x01, // baCSourceID[1]
-    0x00, // bmControls
-    0x00, // iClockSelector
-
-    // clock multiplier descriptor
-    0x07, // bLength
-    0x24, // bDescriptorType
-    0x0c, // bDescriptorSubType
-    0x03, // bClockID
-    0x01, // bCSourceID
-    0x00, // bmControls
-    0x00, // iClockMultiplier
 
     // input terminal descriptor
     0x11,                   // bLength
@@ -196,6 +177,21 @@ static const uint8_t config_descriptor[] = {
     0x00, 0x00 // wLockDelay
 };
 
+// String Descriptors も追加
+static const uint8_t string_descriptor_0[] = {
+    0x04, 0x03, 0x09, 0x04 // Language ID: English (US)
+};
+
+static const uint8_t string_descriptor_1[] = {
+    0x1A, 0x03, // bLength, bDescriptorType
+    'S',  0,    'T', 0, 'M', 0, 'i', 0, 'c', 0, 'r', 0,
+    'o',  0,    'e', 0, 'l', 0, 'e', 0, 'c', 0, 't', 0};
+
+static const uint8_t string_descriptor_2[] = {
+    0x20, 0x03, // bLength (32 bytes), bDescriptorType (STRING)
+    'U',  0,    'S', 0, 'B', 0, ' ', 0, 'A', 0, 'u', 0, 'd', 0, 'i', 0,
+    'o',  0,    ' ', 0, 'D', 0, 'e', 0, 'v', 0, 'i', 0, 'c', 0, 'e', 0};
+
 static void usb_core_reset(void) {
   USB->GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
   while (USB->GRSTCTL & USB_OTG_GRSTCTL_CSRST_Msk)
@@ -217,7 +213,8 @@ void usb_init(void) {
   USB_DEV->DOEPMSK |= USB_OTG_DOEPMSK_XFRCM;
 
   USB->GINTMSK |= USB_OTG_GINTMSK_USBRST | USB_OTG_GINTMSK_ENUMDNEM |
-                  USB_OTG_GINTMSK_RXFLVLM | USB_OTG_GINTMSK_IEPINT;
+                  USB_OTG_GINTMSK_RXFLVLM | USB_OTG_GINTMSK_IEPINT |
+                  USB_OTG_GINTMSK_OEPINT;
   USB_INEP[0].DIEPINT |= USB_OTG_DIEPINT_XFRC;
   USB->GAHBCFG |= USB_OTG_GAHBCFG_GINT;
 
@@ -231,6 +228,12 @@ void usb_init(void) {
 static volatile uint32_t reset_cnt = 0;
 static volatile uint32_t setup_cnt = 0;
 static volatile uint32_t set_interface_cnt = 0;
+static volatile uint32_t alt_setting_0_cnt = 0;
+static volatile uint32_t alt_setting_1_cnt = 0;
+static volatile uint32_t oepint_cnt = 0;
+static volatile uint32_t ep1_xfrc_cnt = 0;
+static volatile uint32_t ep1_out_data_cnt = 0;
+static volatile uint32_t daint_reg = 0;
 
 static const uint8_t *ep0_tx_ptr;
 static uint16_t ep0_tx_remeining;
@@ -259,6 +262,8 @@ void OTG_FS_IRQHandler(void) {
     uint32_t grxstsp = USB->GRXSTSP;
     uint8_t pktsts =
         (grxstsp & USB_OTG_GRXSTSP_PKTSTS_Msk) >> USB_OTG_GRXSTSP_PKTSTS_Pos;
+    uint8_t epnum =
+        (grxstsp & USB_OTG_GRXSTSP_EPNUM_Msk) >> USB_OTG_GRXSTSP_EPNUM_Pos;
     uint32_t *fifo = USB_FIFO(0);
 
     if (pktsts == 0x06) {
@@ -278,6 +283,7 @@ void OTG_FS_IRQHandler(void) {
       if (bRequest == 0x06) {
         // GET_DESCRIPTOR
         uint8_t desc_type = wValue >> 8;
+        uint8_t desc_index = wValue & 0xff;
         uint16_t len = 0;
         const uint8_t *data = NULL;
 
@@ -289,6 +295,28 @@ void OTG_FS_IRQHandler(void) {
         } else if (desc_type == 0x02) {
           data = config_descriptor;
           len = sizeof(config_descriptor);
+
+        } else if (desc_type == 0x03) {
+          switch (desc_index) {
+          case 0:
+            data = string_descriptor_0;
+            len = sizeof(string_descriptor_0);
+            break;
+
+          case 1:
+            data = string_descriptor_1;
+            len = sizeof(string_descriptor_1);
+            break;
+
+          case 2:
+            data = string_descriptor_2;
+            len = sizeof(string_descriptor_2);
+            break;
+
+          default:
+            USB_INEP[0].DIEPCTL |= USB_OTG_DIEPCTL_STALL;
+            return;
+          }
         } else {
           USB_INEP[0].DIEPCTL |= USB_OTG_DIEPCTL_STALL;
         }
@@ -337,9 +365,11 @@ void OTG_FS_IRQHandler(void) {
         if (interface_num == 1) {
           // AS interface
           if (alt_settings == 0) {
+            alt_setting_0_cnt++;
             USB_INEP[1].DIEPCTL &= ~USB_OTG_DIEPCTL_EPENA;
             USB_OUTEP[1].DOEPCTL &= ~USB_OTG_DOEPCTL_EPENA;
           } else if (alt_settings == 1) {
+            alt_setting_1_cnt++;
             USB_INEP[1].DIEPTSIZ = (1 << USB_OTG_DIEPTSIZ_PKTCNT_Pos) | 192;
             USB_INEP[1].DIEPCTL |= USB_OTG_DIEPCTL_EPENA | USB_OTG_DIEPCTL_CNAK;
             USB_OUTEP[1].DOEPTSIZ = (1 << USB_OTG_DOEPTSIZ_PKTCNT_Pos) | 192;
@@ -370,6 +400,13 @@ void OTG_FS_IRQHandler(void) {
     } else if (pktsts == 0x04) {
       uint32_t bc =
           (grxstsp & USB_OTG_GRXSTSP_BCNT_Msk) >> USB_OTG_GRXSTSP_BCNT_Pos;
+      if (epnum == 1) {
+        ep1_out_data_cnt++;
+        uint32_t *fifo1 = USB_FIFO(1);
+        for (uint8_t i = 0; i < (bc + 3) / 4; i++) {
+          (void)*fifo1;
+        }
+      }
       for (uint8_t i = 0; i < (bc + 3) / 4; i++) {
         (void)*fifo;
       }
@@ -411,5 +448,21 @@ void OTG_FS_IRQHandler(void) {
       // USB_OUTEP[0].DOEPTSIZ = (1 << USB_OTG_DOEPTSIZ_PKTCNT_Pos) | 64;
       // USB_OUTEP[0].DOEPCTL |= USB_OTG_DOEPCTL_EPENA | USB_OTG_DOEPCTL_CNAK;
     }
+  }
+
+  if (gintsts & USB_OTG_GINTSTS_OEPINT_Msk) {
+    oepint_cnt++;
+    daint_reg = USB_DEV->DAINT;
+    uint32_t doepint = USB_OUTEP[1].DOEPINT;
+
+    if (doepint & USB_OTG_DOEPINT_XFRC_Msk) {
+      ep1_xfrc_cnt++;
+      USB_OUTEP[1].DOEPINT = USB_OTG_DOEPINT_XFRC;
+
+      USB_OUTEP[1].DOEPTSIZ = (1 << USB_OTG_DOEPTSIZ_PKTCNT_Pos) | 192;
+      USB_OUTEP[1].DOEPCTL |= USB_OTG_DOEPCTL_EPENA | USB_OTG_DOEPCTL_CNAK;
+    }
+
+    USB->GINTSTS = USB_OTG_GINTSTS_OEPINT;
   }
 }
