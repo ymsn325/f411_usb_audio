@@ -18,119 +18,182 @@
                 ((ep) * USB_OTG_FIFO_SIZE)))
 
 static const uint8_t device_descriptor[] = {
-    0x12,       // bLength
-    0x01,       // bDescriptorType (Device)
-    0x00, 0x02, // bcdUSB 2.00
-    0xef,       // bDeviceClass: each interface specifies class
+    0x12, // bLength
+    0x01, // bDescriptorType
+    0x00,
+    0x02,       // bcdUSB
+    0xef,       // bDeviceClass
     0x02,       // bDeviceSubClass
     0x01,       // bDeviceProtocol
     0x40,       // bMaxPacketSize0
-    0x83, 0x04, // idVendor
-    0x11, 0x57, // idProduct
-    0x00, 0x01, // bcdDevice
-    0x01,       // iManufacturer
-    0x02,       // iProduct
-    0x03,       // iSerialNumber
+    0x00, 0x00, // idVendor
+    0x00, 0x00, // idProduct
+    0x00, 0x00, // bcdDevice
+    0x00,       // iManufacture
+    0x00,       // iProduct
+    0x00,       // iSerialNumber
     0x01        // bNumConfigurations
 };
 
-// Configuration Descriptor + Audio Control + Audio Streaming + Isochronous EP
 static const uint8_t config_descriptor[] = {
-    // Configuration Descriptor
-    0x09,       // bLength = 9 bytes
-    0x02,       // bDescriptorType = config
-    0x57, 0x00, // wTotalLength
-    0x01,       // bNumInterfaces
-    0x01,       // nConfigurationValue
+    // standard configuration descriptor
+    0x09,       // bLength
+    0x02,       // bDescriptorType
+    0x96, 0x00, // wTotalLength
+    0x02,       // bNumInterfaces
+    0x01,       // bConfigurationValue
     0x00,       // iConfiguration
-    0x80,       // bmAttributes = self powered
-    250,        // bMaxPower = 500mA
+    0xc0,       // bmAttributes
+    50,         // bMaxPower
+                //
 
-    // Interface Association Descriptor
+    // IAD
     0x08, // bLength
-    0x0b, // bDescriptorType = INTERFACE ASSICOIATION descriptor
+    0x0b, // bDescriptorType
     0x00, // bFirstInterface
     0x02, // bInterfaceCount
     0x01, // bFunctionClass
     0x00, // bFunctionSubClass
-    0x20, // bFunctionProtocol = AF_VERSION_02_)0
+    0x20, // bFunctionProtocol
     0x00, // iFunction
 
-    // Standard AC Interface Descriptor
+    // standard AC interface descriptor (interface 0)
     0x09, // bLength
-    0x04, // bDescriptorType = INTERFACE
-    0x00, // bInterfaceNumber
+    0x04, // bDescriptorType
+    0x00, // bInterfaceNubmer
     0x00, // bAlternateSetting
     0x00, // bNumEndpoints
     0x01, // bInterfaceClass
-    0x01, // bInterfaceSubClass = AUDIOCONTROL
-    0x20, // bInterfaceProtocol = IP_VERSION_02_00
+    0x01, // bInterfaceSubClass
+    0x20, // bInterfaceProtocol
     0x00, // iInterface
 
-    // Class-Specific AC Interface Descriptor
+    // class specific AC interface descriptor
     0x09,       // bLength
-    0x24,       // bDescriptorType = CS_INTERFACE
-    0x01,       // bDescriptorSubType  = HEADER
-    0x02, 0x00, // bcdADC = UAC2.0
-    0x01,       // bCategory = DESKTOP_SPEAKER
-    0x3e, 0x00, // wTotalLength = 9 bytes
-    0x00,       // bmControls = No control
+    0x24,       // bDescriptorType
+    0x01,       // bDescriptorSubType
+    0x00, 0x02, // bcdADC
+    0x01,       // bCategory
+    0x37, 0x00, // wTotalLength
+    0x11,       // bmControls
 
-    // Clock Source Descriptor
+    // clock source descriptor
     0x08, // bLength
-    0x24, // bDeescriptorType = CS_INTERFACE
-    0x0a, // bDescriptorSubSype = CLOCK_SOURCE
-    0x00, // bClockID
-    0x01, // bmAttributes = Internal fixed clock
-    0x07, // bmControl
-    0x00, // bAssocTerminal
-    0x00, // iClockSource
-
-    // Clock Selector Descriptor
-    0x08, // bLength
-    0x24, // bDescriptorType = CS_INTERFACE
-    0x0b, // bDescriptorSubType = CLOCK_SELECTOR
+    0x24, // bDescripterType
+    0x0a, // bDescriptorSubtype
     0x01, // bClockID
+    0x01, // bmAttributes
+    0x00, // bmControls
+    0x00, // bAssocTerminal
+    0x00, // iCockSource
+
+    // clock selector descriptor
+    0x08, // bLength
+    0x24, // bDescriptorType
+    0x0b, // bDescriptorSubType
+    0x02, // bClockID
     0x01, // bNrInPins
-    0x00, // baCSourceID[1]
-    0x03, // bmControls
+    0x01, // baCSourceID[1]
+    0x00, // bmControls
     0x00, // iClockSelector
 
-    // Clock Multiplier Descriptor
-    0x08, // bLength = 8 bytes
-    0x24, // bDescriptorType = CS_INTERFACE
-    0x0C, // bDescriptorSubtype = CLOCK_MULTIPLIER
-    0x02, // bClockID = このクロックマルチプライヤのID
-    0x00, // bCSourceID = 乗算元 Clock Source ID
-    0x03, // bmControls = 0b11 → ホストが変更可能
-    0x04, // bMultiplier = 4倍
-    0x00, // iClockMultiplier = 文字列なし
+    // clock multiplier descriptor
+    0x07, // bLength
+    0x24, // bDescriptorType
+    0x0c, // bDescriptorSubType
+    0x03, // bClockID
+    0x01, // bCSourceID
+    0x00, // bmControls
+    0x00, // iClockMultiplier
 
-    // Input Terminal Descriptor
-    0x11,                   // bLength = 17 bytes
-    0x24,                   // bDescriptorType = CS_INTERFACE
-    0x02,                   // bDescriptorSubtype = INPUT_TERMINAL
-    0x01,                   // bTerminalID = 1
-    0x01, 0x02,             // wTerminalType = USB Streaming (0x0201)
-    0x00,                   // bAssocTerminal = なし
-    0x00,                   // bCSourceID = Clock Source ID 0x10
-    0x02,                   // bNrChannels = 2 (ステレオ)
-    0x03, 0x00, 0x00, 0x00, // wChannelConfig = 左右チャンネル
-    0x00,                   // iChannelNames = なし
-    0x00, 0x00,             // bmControls = none
-    0x00,                   // iTerminal = なし
+    // input terminal descriptor
+    0x11,                   // bLength
+    0x24,                   // bDescriptorType
+    0x02,                   // bDescriptorSubType
+    0x01,                   // bTerminalID
+    0x01, 0x02,             // wTerminalType
+    0x01,                   // bAssocTerminal
+    0x01,                   // bCSourceID
+    0x01,                   // bNrChannels
+    0x01, 0x00, 0x00, 0x00, // bmChannelConfig
+    0x00,                   // iChannelNames
+    0x00, 0x00,             // bmControls
+    0x00,                   // iTerminal
 
-    // Output Terminal Descriptor
-    0x0c,       // bLength = 9 bytes
-    0x24,       // bDescriptorType = CS_INTERFACE
-    0x03,       // bDescriptorSubtype = OUTPUT_TERMINAL
-    0x02,       // bTerminalID = 2
-    0x01, 0x03, // wTerminalType = Speaker (0x0301)
-    0x00,       // bAssocTerminal = なし
-    0x01,       // bSourceID = Input Terminal ID (または Feature Unit ID)
-    0x00,       // bCSourceID = Clock Source ID
-    0x00, 0x00, // bmControls = none
-    0x00        // iTerminal = なし
+    // output terminal descriptor
+    0x0c,       // bLength
+    0x24,       // bDescriptorType
+    0x03,       // bDescriptorSubType
+    0x02,       // bTerminalID
+    0x01, 0x03, // wTerminalType
+    0x00,       // bAssocTerminal
+    0x01,       // bSourceID
+    0x01,       // bCSourceID
+    0x00, 0x00, // bmControls
+    0x00,       // iTerminal
+
+    // standard AS interface descriptor (interface 1, alt 0)
+    0x09, // bLength
+    0x04, // bDescriptorType
+    0x01, // bInterfaceNumber
+    0x00, // bAlternateSetting
+    0x00, // bNumEndpoints
+    0x01, // bInterfaceClass
+    0x02, // bInterfaceSubClass
+    0x20, // bInterfaceProtocol
+    0x00, // iInterface
+
+    // standard AS interface descriptor (interface 1, alt 1)
+    0x09, // bLength
+    0x04, // bDescriptorType
+    0x01, // bInterfaceNumber
+    0x01, // bAlternateSetting
+    0x01, // bNumEndpoints
+    0x01, // bInterfaceClass
+    0x02, // bInterfaceSubClass
+    0x20, // bInterfaceProtocol
+    0x00, // iInterface
+
+    // class-specific AS interface descriptor
+    0x10,                   // bLength
+    0x24,                   // bDescriptorType
+    0x01,                   // bDescriptorSubType
+    0x01,                   // bTerminalLink
+    0x00,                   // bmControls
+    0x01,                   // bFormatType
+    0x01, 0x00, 0x00, 0x00, // bmFormats
+    0x02,                   // bNrChannels
+    0x03, 0x00, 0x00, 0x00, // bmChannelConfig
+    0x00,                   // iChannelNames
+
+    // format type descriptor
+    0x0e,             // bLength
+    0x24,             // bDescriptorType
+    0x02,             // bDescriptorSubType
+    0x01,             // bFormatType
+    0x02,             // bNrChannels
+    0x02,             // bSubFrameSize
+    0x10,             // bBitResolution
+    0x01,             // bSamFreqType
+    0x80, 0xbb, 0x00, // tLowerSamFreq
+    0x80, 0xbb, 0x00, // tUpperSamFreq
+
+    // standard isochronous endpoint descriptor
+    0x07,       // bLength
+    0x05,       // bDescriptorType
+    0x01,       // bEndpointAddress
+    0x05,       // bmAttributes
+    0xc0, 0x00, // wMaxPacketSize
+    0x01,       // bInterval
+
+    // class-specific endpoint descriptor
+    0x08,      // bLength
+    0x25,      // bDescriptorType
+    0x01,      // bDescriptorSubType
+    0x00,      // bmAttributes
+    0x00,      // bmControls
+    0x00,      // bLockDelayUnits
+    0x00, 0x00 // wLockDelay
 };
 
 static void usb_core_reset(void) {
@@ -270,7 +333,6 @@ void OTG_FS_IRQHandler(void) {
         set_interface_cnt++;
         uint8_t interface_num = wIndex & 0xff;
         uint8_t alt_settings = wValue & 0xff;
-        interface_num = wLength;
 
         if (interface_num == 1) {
           // AS interface
